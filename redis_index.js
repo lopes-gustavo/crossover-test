@@ -8,10 +8,12 @@ const DEFAULT_BALANCE = 100;
 const MAX_EXPIRATION = 60 * 60 * 24 * 30;
 const memcachedClient = new memcached(`${process.env.ENDPOINT}:${process.env.PORT}`);
 
+let mainRedisClient;
+
 exports.chargeRequestRedis = async function (input) {
     const redisClient = await getRedisClient();
-    var remainingBalance = await getBalanceRedis(redisClient, KEY);
     var charges = getCharges();
+    var remainingBalance = await getBalanceRedis(redisClient, KEY);
     const isAuthorized = authorizeRequest(remainingBalance, charges);
     if (!isAuthorized) {
         return {
@@ -21,7 +23,7 @@ exports.chargeRequestRedis = async function (input) {
         };
     }
     remainingBalance = await chargeRedis(redisClient, KEY, charges);
-    await disconnectRedis(redisClient);
+    //await disconnectRedis(redisClient);
     return {
         remainingBalance,
         charges,
@@ -40,7 +42,7 @@ exports.resetRedis = async function () {
             }
         });
     });
-    await disconnectRedis(redisClient);
+    //await disconnectRedis(redisClient);
     return ret;
 };
 exports.resetMemcached = async function () {
@@ -73,6 +75,9 @@ exports.chargeRequestMemcached = async function (input) {
     };
 };
 async function getRedisClient() {
+    // Do not connect again if connection is already made
+    if (mainRedisClient) return mainRedisClient;
+
     return new Promise((resolve, reject) => {
         try {
             const client = new redis.RedisClient({
